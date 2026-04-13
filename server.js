@@ -52,7 +52,7 @@ app.get('*', (req, res) => {
         res.json({
             success: true,
             msg: "OK",
-            backfil: "hhttps://terminalcore.onrender.com"   // replace with your real Render URL
+            backfil: "https://terminalcore.onrender.com"   // replace with your real Render URL
         });
     } else {
         res.status(200).send('OK');
